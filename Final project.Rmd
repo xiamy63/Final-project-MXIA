@@ -1,0 +1,319 @@
+---
+title: "Final project"
+output: pdf_document
+date: "2025-08-20"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Read in data
+
+```{r}
+
+### Read in files.
+
+setwd("/Users/mengyingxia/Desktop/QBS103/Github/Final-project")
+
+#check where we are
+getwd()
+
+#use read.csv
+gene_exp  <- read.csv(file ="QBS103_GSE157103_genes.csv",row.names=1)
+meta_data <- read.csv(file = "QBS103_GSE157103_series_matrix-1.csv",row.names=1)
+
+
+#my rationale to choose the gene - the range of expression is wide across sample
+
+#calculate range for each row
+diff_exp <- apply(gene_exp, 1, function(x) max(x) - min(x))
+
+#sort the range
+diff_exp <- sort(diff_exp)
+print(diff_exp)
+
+#The gene I choose is ABHD5 and the reference is https://www.ncbi.nlm.nih.gov/gene/51099
+```
+
+```{r}
+
+#reshape the gene expression data
+exp_ABHD5 <- as.data.frame(t(gene_exp["ABHD5",]))
+
+#there is one row named differently in two data sets, locate and rename it
+setdiff(rownames(meta_data),rownames(exp_ABHD5))
+setdiff(rownames(exp_ABHD5),rownames(meta_data))
+
+#the age was missing for this participant
+rownames(meta_data)[rownames(meta_data) == "COVID_06_:y_male_NonICU"] <- "COVID_06_missing_male_NonICU"
+rownames(exp_ABHD5)[rownames(exp_ABHD5) == "COVID_06_.y_male_NonICU"] <- "COVID_06_missing_male_NonICU"
+
+#check if the rowname is identical after renaming
+identical(rownames(meta_data),rownames(exp_ABHD5))
+
+#merge
+df <- merge(meta_data, exp_ABHD5, by = "row.names")
+
+#change the rowname and drop the first column which is rowname
+rownames(df) <- df[,1]
+df <- df[,-1]
+```
+
+```{r}
+#check the spelling of each category, pay attention to the blank in front of the character
+table(df$sex)
+levels(df$sex) 
+
+#drop missing sex
+df <- df[which(!df$sex == " unknown"),]
+#change the name of each level
+df$sex[df$sex == " female"] <- "Female"
+df$sex[df$sex == " male"] <- "Male"
+df$sex<-as.factor(df$sex)
+
+
+#check the spelling of each category
+table(df$disease_status)
+
+#change the name
+df$disease_status[df$disease_status == "disease state: COVID-19"] <- "COVID-19"
+df$disease_status[df$disease_status == "disease state: non-COVID-19"] <- "Non-COVID-19"
+df$disease_status<-as.factor(df$disease_status)
+
+#check each category again
+table(df$disease_status)
+```
+
+### Table1 for statistics
+
+``` {r, include = F}
+library(knitr)
+library(kableExtra)
+library(table1)
+
+df <- df
+my.render.cont <- function(x) {
+  q <- quantile(x, probs = c(0.25, 0.5, 0.75), na.rm = TRUE, names = FALSE)
+  median_iqr <- sprintf("%0.1f [%0.1f, %0.1f]", q[2], q[1], q[3])
+        sprintf(median_iqr)
+}
+
+summary(df)
+table1(~ sex + icu_status + charlson_score + as.numeric(ferritin.ng.ml.) + as.numeric(procalcitonin.ng.ml..)|as.factor(disease_status), df, render.continuous=my.render.cont)
+``` 
+
+
+```{r, results='asis'}
+library(knitr)
+library(kableExtra)
+
+table1 <- data.frame(
+  Variable = c("\\textbf{Sex} n (\\%)",
+               "\\quad Female",
+               "\\quad Male",
+               "\\textbf{ICU status} n (\\%)",
+               "\\quad No",
+               "\\quad Yes",
+               "\\textbf{Charlson score} Median [IQR]",
+               "\\textbf{Ferritin (ng/ml)} Median [IQR]",
+               "\\quad Missing",
+               "\\textbf{Procalcitonin (ng/ml)} Median [IQR]",
+               "\\quad Missing"),
+  `COVID-19\\\\(N = 100, 80\\%)` = c("", "38 (38.0\\%)", "62 (62.0\\%)",
+                                    "", "50 (50.0\\%)", "50 (50.0\\%)",
+                                    "3.0 [1.0, 5.0]",
+                                    "652.0 [307.5, 1179.0]",
+                                    "6 (6.0\\%)",
+                                    "0.6 [0.2, 1.8]",
+                                    "13 (13.0\\%)"),
+  `Non-COVID-19\\\\(N = 25, 20\\%)` = c("", "13 (52.0\\%)", "12 (48.0\\%)",
+                                       "", "10 (40.0\\%)", "15 (60.0\\%)",
+                                       "4.0 [2.0, 6.0]",
+                                       "142.0 [83.5, 325.5]",
+                                       "9 (36.0\\%)",
+                                       "0.4 [0.3, 0.7]",
+                                       "10 (40.0\\%)"),
+  `Overall\\\\(N = 125, 100\\%)` = c("", "51 (40.8\\%)", "74 (59.2\\%)",
+                                   "", "60 (48.0\\%)", "65 (52.0\\%)",
+                                   "3.0 [2.0, 5.0]",
+                                   "573.0 [222.0, 1091.5]",
+                                   "15 (12.0\\%)",
+                                   "0.5 [0.2, 1.6]",
+                                   "23 (18.4\\%)"),
+  stringsAsFactors = FALSE
+)
+
+kable(
+  table1, format = "latex", booktabs = TRUE, escape = FALSE,
+  col.names = c(
+  "", 
+  "COVID-19 (N = 100, 80.0\\%)",
+  "Non-COVID-19 (N = 25, 20.0\\%)",
+  "Overall (N = 125, 100.0\\%)"),
+  caption = "Table 1: Baseline Characteristics Stratified by COVID Status",
+  linesep = ""
+) %>%
+  kable_styling(latex_options = c("hold_position"), full_width = FALSE) %>%
+  column_spec(1, width = "3cm") %>%    
+  column_spec(2, width = "4.5cm") %>%   
+  column_spec(3, width = "5cm") %>%
+  column_spec(4, width = "4.5cm")
+```
+
+### Histogram for gene expression 
+
+```{r}
+library(ggplot2)
+
+# Create histogram
+ggplot(df, aes(x = ABHD5)) +
+  geom_histogram(aes(y=..density..*100), 
+                 binwidth = 5, 
+                 fill = "lightblue", 
+                 color = "white", 
+                 boundary = 0) +
+  geom_smooth(aes(y = ..density..*100),
+              stat = "density", 
+              color = "#5B91BE" , linewidth = 0.5) +
+  labs(title = "Distribution of the Gene Expression of ABHD5", 
+       x = "Gene Expression of ABHD5", 
+       y = "Percent Density (%)") +
+  scale_x_continuous(breaks = c(0, 25, 50, 75, 100, 125, 150, 175)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),  
+    panel.grid.major = element_line(color = "gray", 
+                                    linewidth = 0.5, 
+                                    linetype = "dotted"),
+    panel.grid.minor = element_line(color = "gray", 
+                                    linewidth = 0.5, 
+                                    linetype = "dotted"),
+    panel.border = element_rect(color = "black", fill = NA, size = 0.8),
+    panel.background = element_rect(fill = "white"),
+    #plot.background = element_rect(fill = "lightgray"),
+    axis.line = element_blank()  
+  )
+
+```
+
+### Scatterplot for gene expression and continuous covariate
+
+```{r, warning = F, message = F}
+ggplot(df, aes(x = charlson_score, y = ABHD5, color = sex)) +
+    geom_point(shape = 1, size = 1, stroke = 1)+
+    geom_smooth(method = "lm", size = 1.2, fill = NA)+
+  labs(title = "Distribution of the Gene Expression of ABHD5 \n According to Charlson Score by Sex",
+       x = "Charlson Score",
+       y = "Gene Expression of ABHD5",
+       color = "Sex") +
+  scale_x_continuous(breaks = c(0,2,4,6,8,10))+
+  theme(
+    plot.title = element_text(hjust = 0.5, face="bold"),  
+    panel.background = element_rect(fill = "white"),
+    plot.background = element_rect(fill = "lightgray"),
+    panel.grid.major = element_line(color = "gray", 
+                                    size = 0.5, 
+                                    linetype = "dotted"),
+    panel.grid.minor = element_line(color = "gray", 
+                                    size = 0.5, 
+                                    linetype = "dotted"),
+    axis.line = element_line(color = "black"),
+    legend.position = "right")
+```
+
+### Boxplot of gene expression separated by both categorical covariates
+
+```{r}
+ggplot(df, aes(x = sex, y = ABHD5, fill = disease_status)) +
+  geom_boxplot(position = position_dodge(width = 0.8)) +
+  labs(title = "Distribution of the Gene Expression of ABHD5 \n by Disease Status and Sex",
+       x = "Sex",
+       y = "Gene Expression of ABHD5",
+       fill = "Disease status") +
+  theme(
+    plot.title = element_text(hjust = 0.5, face="bold"),  
+    panel.background = element_rect(fill = "white"),
+    plot.background = element_rect(fill = "lightgray"),
+    panel.border = element_rect(color = "black", fill = NA, size = 0.8),
+    panel.grid = element_blank(),
+    axis.line = element_blank(),
+    legend.position = "right")
+```
+### Heatmap
+
+```{r}
+library(pheatmap)
+
+
+random <- c("ABHD17A", "ABCF2", "ABCB5", "ABCC2", "ABCC10", "ABHD4", "ABCF1", "ABHD17B", "AATF", "ABCB1", "ABHD13", "AAGAB", "ABCA6", "ABAT", "ABCB10", "AARSD1", "AAAS", "AARS2","ABCF2-H2BE1")  
+
+#reshape the gene expression data
+exp_genes <- as.data.frame(t(gene_exp[random,]))
+
+exp_genes <- exp_genes[rownames(exp_genes) != "NONCOVID_15_83y_unknown_ICU",]
+rownames(exp_genes)[rownames(exp_genes) == "COVID_06_.y_male_NonICU"] <- "COVID_06_missing_male_NonICU"
+
+#merge
+df_htmp <- merge(df, exp_genes, by = "row.names")
+
+#change the rowname and drop the first column which is rowname
+rownames(df_htmp) <- df_htmp[,1]
+df_htmp <- df_htmp[,-1]
+
+htmp <- merge (df_htmp[,25:44], df_htmp[,c("sex","disease_status")], by = "row.names")
+rownames(htmp) <- htmp[,1]
+htmp <- htmp[,-1]
+
+# Calculate variance of each miRNA
+variance <- apply(df_htmp[,25:44], MARGIN = 1, FUN = var)
+# Order rows of miRNA so that highest variance in expression is on top
+ordered_htmp <- htmp[order(variance,decreasing = T),]
+
+
+library(dplyr)
+
+log2.htmp <- ordered_htmp %>%
+  mutate(across(where(is.numeric), ~ log2(.)))
+
+library(pheatmap)
+
+# Define covariate for tracking bar
+set.seed(1996)
+
+annotationData <- data.frame(row.names = row.names(log2.htmp),
+                             Sex = log2.htmp$sex,
+                             `Disease Status` = log2.htmp$disease_status,
+                             check.names = FALSE,
+                             stringsAsFactors = FALSE
+                             )
+
+annotationColors <- list(Sex = c(Female = "aquamarine4", Male = "green"),
+                         "Disease Status" = c("COVID-19" = "pink", "Non-COVID-19" = "grey")
+                         )
+
+pheatmap(t(log2.htmp[1:20,1:20]),
+         clustering_distance_cols = 'euclidean',
+         clustering_distance_rows = 'euclidean',
+         angle_col = 315,
+         annotation_col = annotationData,
+         annotation_colors = annotationColors,
+         fontsize = 10,
+         fontsize_row = 8,
+         fontsize_col = 8, 
+         cellwidth = 12, 
+         cellheight = 7)
+
+```
+
+### Violin Plot
+```{r}
+ggplot(df,aes(x = sex, y = ABHD5, fill = disease_status)) +
+  geom_violin() +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9)) +
+  labs(title = "    Distribution of the Gene Expression of ABHD5 by Disease Status and Sex",
+       x = "Sex",
+       y = "Gene Expression of ABHD5",
+       fill = "Disease status") +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"))
+```
+
