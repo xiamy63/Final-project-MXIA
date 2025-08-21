@@ -104,8 +104,6 @@ table1(~ sex + icu_status + charlson_score + as.numeric(ferritin.ng.ml.) + as.nu
 
 
 ```{r, results='asis'}
-library(knitr)
-library(kableExtra)
 
 table1 <- data.frame(
   Variable = c("\\textbf{Sex} n (\\%)",
@@ -150,7 +148,7 @@ kable(
   "COVID-19 (N = 100, 80.0\\%)",
   "Non-COVID-19 (N = 25, 20.0\\%)",
   "Overall (N = 125, 100.0\\%)"),
-  caption = "Table 1: Baseline Characteristics Stratified by COVID Status",
+  caption = "Baseline Characteristics Stratified by COVID Status",
   linesep = ""
 ) %>%
   kable_styling(latex_options = c("hold_position"), full_width = FALSE) %>%
@@ -242,9 +240,6 @@ ggplot(df, aes(x = sex, y = ABHD5, fill = disease_status)) +
 ### Heatmap
 
 ```{r}
-library(pheatmap)
-
-
 random <- c("ABHD17A", "ABCF2", "ABCB5", "ABCC2", "ABCC10", "ABHD4", "ABCF1", "ABHD17B", "AATF", "ABCB1", "ABHD13", "AAGAB", "ABCA6", "ABAT", "ABCB10", "AARSD1", "AAAS", "AARS2","ABCF2-H2BE1")  
 
 #reshape the gene expression data
@@ -307,13 +302,13 @@ pheatmap(t(log2.htmp[1:20,1:20]),
 
 ### Violin Plot
 ```{r}
-ggplot(df,aes(x = sex, y = ABHD5, fill = disease_status)) +
-  geom_violin() +
-  geom_boxplot(width = 0.1, position = position_dodge(0.9)) +
-  labs(title = "    Distribution of the Gene Expression of ABHD5 by Disease Status and Sex",
-       x = "Sex",
-       y = "Gene Expression of ABHD5",
-       fill = "Disease status") +
+library(hexbin)
+
+ggplot(df,aes(x = charlson_score, y = ABHD5)) +
+  stat_binhex(bins = 25)+
+  labs(title = "    Distribution of the Gene Expression of ABHD5 by Charlson Score",
+       x = "Charlson Score",
+       y = "Gene Expression of ABHD5") +
   theme(plot.title = element_text(hjust = 0.5, face="bold"))
 ```
 
